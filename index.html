@@ -150,7 +150,7 @@ const cats=()=>shop.cats||[];
 let me=null,prods=[],orders=[],sites=[],keys=[],accts=[],evs=[],shop={},myR=0,tab="shop",at="prod",ed=null,lastKeys="",unE=null,unA=null;
 try{me=JSON.parse(localStorage.getItem("tpl_sess")||"null")}catch(e){}
 const isAdm=()=>me&&me.role=="admin";
-const SITE=new URLSearchParams(location.search).get("site")||(/^\?[a-z0-9]{5}$/.test(location.search)?location.search.slice(1):null);
+const SITE=new URLSearchParams(location.search).get("site")||((location.search.match(/^\?([a-z0-9]{5})(?:&|$)/)||[])[1]||null);
 const RV=()=>+shop.rv||0;
 const soldOut=p=>p.stock!=null&&p.stock<=0;
 const canRight=p=>myR>0&&!soldOut(p)&&(RV()<=0||p.price<=RV());
@@ -529,7 +529,7 @@ $("#app").className="";
 const s=await dc("sites",SITE).get();
 if(!s.exists){$("#app").innerHTML='<div class="c">ไม่พบเว็บนี้</div>';return}
 const d=s.data(),html=build(d.tpl,fieldsOf(d.fields),d.vals);
-document.open();document.write(html);document.close();return;
+document.title=d.slug||d.pname||"เว็บ";document.documentElement.style.cssText="padding:0;height:100%";document.body.style.cssText="margin:0;height:100%;overflow:hidden;background:#fff";document.body.innerHTML='<iframe style="position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals"></iframe>';document.querySelector("iframe").srcdoc=html;return;
 }
 if(me){
 if(isAdm()){if(!(await dc("admin","admin").get()).exists)me=null}
