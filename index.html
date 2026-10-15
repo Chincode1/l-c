@@ -91,7 +91,7 @@ iframe.pv{width:100%;height:300px;border:1px solid var(--bd);border-radius:10px;
 <div id="tw"></div><div id="bt"></div><div class="w fx" id="app">กำลังโหลด...</div><div id="bn"></div><div id="mo"></div>
 <script>
 const CFG={apiKey:"AIzaSyASvuyhGLcblkYWRuHhXOuIi2Gj6zYtzJU",authDomain:"chingame-ae1ce.firebaseapp.com",projectId:"chingame-ae1ce",appId:"1:691058862335:web:4f4597ec07c7a7245bc4ca"};
-firebase.initializeApp(CFG);const R=firebase.firestore(),INC=n=>firebase.firestore.FieldValue.increment(n);
+firebase.initializeApp(CFG);const R=firebase.firestore();R.settings({experimentalAutoDetectLongPolling:true});const INC=n=>firebase.firestore.FieldValue.increment(n);
 const col=c=>R.collection("tpl_"+c),dc=(c,i)=>R.doc("tpl_"+c+"/"+i);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -102,7 +102,7 @@ const ERR=e=>e&&(e.code=="permission-denied"?"ไม่มีสิทธิ์�
 const say=(m,ok)=>{const t=document.createElement("div");t.className="ts"+(ok?"":" er");t.textContent=m;$("#tw").appendChild(t);setTimeout(()=>t.remove(),4200)};
 const closeM=()=>$("#mo").innerHTML="";
 const modal=h=>$("#mo").innerHTML=`<div class="ov" onclick="if(event.target==this)closeM()"><div class="md">${h}</div></div>`;
-const spin=on=>{if(on){if(!$("#ld"))document.body.insertAdjacentHTML("beforeend",'<div id="ld"><i></i></div>')}else $("#ld")?.remove()};
+let spT=0;const spin=on=>{clearTimeout(spT);if(on){if(!$("#ld"))document.body.insertAdjacentHTML("beforeend",'<div id="ld"><i></i></div>');spT=setTimeout(()=>{$("#ld")?.remove();say("เน็ตช้า ลองใหม่อีกครั้ง")},15000)}else $("#ld")?.remove()};
 const run=async f=>{spin(1);try{return await f()}catch(e){say(ERR(e))}finally{spin(0)}};
 
 /* ===== ไอคอนเส้นบาง ===== */
@@ -182,10 +182,9 @@ if(chg&&!$("#mo").innerHTML&&tab!="edit")render()},()=>{})}
 
 async function load(){
 const g=async q=>(await q.get().catch(()=>({docs:[]}))).docs.map(x=>({id:x.id,...x.data()}));
-prods=(await g(col("products"))).sort((a,b)=>b.at-a.at);
-const s=await dc("settings","shop").get().catch(()=>({exists:false}));shop=s.exists?s.data():{};
-if(isAdm()){orders=(await g(col("orders"))).sort((a,b)=>b.at-a.at);sites=await g(col("sites"));keys=await g(col("keys"));accts=(await g(col("accounts"))).sort((a,b)=>(b.at||0)-(a.at||0));evs=await g(col("events").orderBy("at","desc").limit(60))}
-else if(me){orders=(await g(col("orders").where("u","==",me.u))).sort((a,b)=>b.at-a.at);sites=await g(col("sites").where("owner","==",me.u));const a=await dc("accounts",me.u).get().catch(()=>({exists:false}));myR=a.exists?(a.data().rights||0):0}
+const[pl,s]=await Promise.all([g(col("products")),dc("settings","shop").get().catch(()=>({exists:false}))]);prods=pl.sort((a,b)=>b.at-a.at);shop=s.exists?s.data():{};
+if(isAdm()){const[o,si,ke,ac,ev]=await Promise.all([g(col("orders")),g(col("sites")),g(col("keys")),g(col("accounts")),g(col("events").orderBy("at","desc").limit(60))]);orders=o.sort((a,b)=>b.at-a.at);sites=si;keys=ke;accts=ac.sort((a,b)=>(b.at||0)-(a.at||0));evs=ev}
+else if(me){const[o,si,a]=await Promise.all([g(col("orders").where("u","==",me.u)),g(col("sites").where("owner","==",me.u)),dc("accounts",me.u).get().catch(()=>({exists:false}))]);orders=o.sort((a,b)=>b.at-a.at);sites=si;myR=a.exists?(a.data().rights||0):0}
 applyTheme();
 }
 function applyTheme(){const s=document.documentElement.style,set=(k,v)=>v?s.setProperty(k,v):s.removeProperty(k),T=shop.tx||"#000";
@@ -528,7 +527,8 @@ if(SITE){
 $("#app").className="";
 const s=await dc("sites",SITE).get();
 if(!s.exists){$("#app").innerHTML='<div class="c">ไม่พบเว็บนี้</div>';return}
-const d=s.data(),html=build(d.tpl,fieldsOf(d.fields),d.vals);
+const d=s.data(),pp=await dc("products",d.pid).get(),pd=pp.exists?pp.data():null;
+const html=build(pd&&pd.tpl?pd.tpl:d.tpl,fieldsOf(pd&&pd.fields?pd.fields:d.fields),d.vals);
 document.title=d.slug||d.pname||"เว็บ";document.documentElement.style.cssText="padding:0;height:100%";document.body.style.cssText="margin:0;height:100%;overflow:hidden;background:#fff";document.body.innerHTML='<iframe style="position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals"></iframe>';document.querySelector("iframe").srcdoc=html;return;
 }
 if(me){
