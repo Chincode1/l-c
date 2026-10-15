@@ -124,6 +124,7 @@ list:'<path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/>',
 plus:'<path d="M12 5v14M5 12h14"/>',
 tag:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>',
 flame:'<path d="M12 3c1 4 5 5.5 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .3 1.5 1 2 2 2 0-3-1-5 1-8z"/>',
+play:'<path d="M8 5v14l11-7z"/>',
 bell:'<path d="M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 20a2 2 0 004 0"/>'
 };
 const ic=(n,s)=>`<svg class="ic" width="${s||20}" height="${s||20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
@@ -251,12 +252,13 @@ const p=prods.find(x=>x.id==id);if(!p)return;
 if(!isAdm())logEv("view","กดดูสไตล์ "+p.name);
 if(!me){authUI(0);return say("เข้าสู่ระบบก่อน")}
 if(isAdm())return say("ผู้ดูแลซื้อไม่ได้ ใช้บัญชีลูกค้าแทน");
-const html=build(p.tpl,fieldsOf(p.fields),{});
+const html=build(p.tpl,fieldsOf(p.fields),p.defs||{});
 const rt=myR>0?(canRight(p)?`<div class="gift">${ic("gift",20)}<div style="flex:1"><b style="font-weight:500">มีสิทธิ์ฟรี ${myR} สิทธิ์</b><div class="mu">${rvTxt()}</div><button class="b f" onclick="useRight('${p.id}')">รับสไตล์นี้ฟรี (ใช้ 1 สิทธิ์)</button></div></div>`:`<div class="c mu">คุณมี ${myR} สิทธิ์ แต่สไตล์นี้ราคาเกิน ${rvTxt()}</div>`):"";
 const buy=soldOut(p)?`<div class="c"><h3>สินค้าหมดแล้ว</h3><div class="mu" style="margin-bottom:6px">ติดต่อแอดมินเพื่อสอบถามรอบถัดไป</div>${lineBtn("f")}</div>`:`${rt}
 <div class="c"><h3>ใส่โค้ดที่ซื้อมา</h3><input id="kc" placeholder="XXXX-XXXX-XXXX" autocapitalize="characters"><button class="b f" onclick="redeem('${p.id}')">ยืนยันโค้ด</button></div>
 <div class="c"><h3>ยังไม่มีโค้ด</h3>${shop.lmsg?`<div class="lm">${esc(shop.lmsg)}</div>`:""}${lineBtn("f")}</div>`;
-modal(`<h3 style="margin:0;font-weight:500">${esc(p.name)} ${p.hot?`<span class="chip" style="color:#e8590c;border-color:#e8590c">${ic("flame",12)}ยอดฮิต</span>`:""}</h3><div class="mu">${esc(p.desc||"")}</div><iframe class="pv" sandbox="allow-scripts" srcdoc="${esc(html)}"></iframe><div class="mu">ปรับแต่งได้ ${p.edits||3} ครั้ง · เปิดเว็บถาวร</div><div style="margin:6px 0;font-size:20px;font-weight:500;${p.pcol?`color:${esc(p.pcol)}`:""}">${p.price} บาท</div>${stk(p)}${buy}`);
+modal(`<h3 style="margin:0;font-weight:500">${esc(p.name)} ${p.hot?`<span class="chip" style="color:#e8590c;border-color:#e8590c">${ic("flame",12)}ยอดฮิต</span>`:""}</h3><div id="pg"></div><div class="mu">${esc(p.desc||"")}</div><iframe class="pv" sandbox="allow-scripts" srcdoc="${esc(html)}"></iframe><div class="mu">ปรับแต่งได้ ${p.edits||3} ครั้ง · เปิดเว็บถาวร</div><div style="margin:6px 0;font-size:20px;font-weight:500;${p.pcol?`color:${esc(p.pcol)}`:""}">${p.price} บาท</div>${stk(p)}${buy}`);
+loadGal(id);
 }
 const redeem=pid=>run(async()=>{
 const c=$("#kc").value.trim().toUpperCase();if(!c)return say("กรอกโค้ด");
@@ -305,7 +307,7 @@ const or=dc("orders",oid),od=await t.get(or);
 if(!od.exists||od.data().u!==me.u||od.data().status!=="paid")throw Error("รายการนี้ใช้ไม่ได้");
 for(let i=0;i<6&&!id;i++){const c=rs().substring(0,5);if(!(await t.get(dc("sites",c))).exists)id=c}
 if(!id)throw Error("ลองใหม่อีกครั้ง");
-t.set(dc("sites",id),{owner:me.u,slug:nm,pid:p.id,pname:p.name,tpl:p.tpl,fields:p.fields,vals:{},editsLeft:+p.edits||3,at:Date.now()});
+t.set(dc("sites",id),{owner:me.u,slug:nm,pid:p.id,pname:p.name,tpl:p.tpl,fields:p.fields,vals:{...(p.defs||{})},editsLeft:+p.edits||3,at:Date.now()});
 t.update(or,{status:"done",site:id});
 });
 logEv("site","เปิดเว็บ "+nm+" ("+id+")");
@@ -313,49 +315,33 @@ closeM();await load();go("mine");say("เปิดเว็บแล้ว ล�
 });
 
 /* ===== ปรับแต่งเว็บ ===== */
-const editOpen=id=>run(async()=>{const s=sites.find(x=>x.id==id);if(!s)return;const rs=await mResolve(s.vals||{});ed={s,v:{...rs},res:{...rs},raw:{...(s.vals||{})}};tab="edit";render();scrollTo(0,0)});
+const editOpen=id=>{const s=sites.find(x=>x.id==id);if(!s)return;ed={s,v:{...s.vals}};tab="edit";render();scrollTo(0,0)};
 function editUI(){
 const s=ed.s,fl=fieldsOf(s.fields);
-return `<div class="c"><h3>ปรับแต่ง: ${esc(s.pname)}</h3><div class="mu">สิทธิ์แก้ไขเหลือ <b>${s.editsLeft}</b> ครั้ง (กดบันทึก 1 ครั้ง = ใช้ 1 สิทธิ์) หมดแล้วต้องขอโค้ดใหม่</div><iframe class="pv" id="pv" sandbox="allow-scripts" srcdoc="${esc(build(s.tpl,fl,ed.v))}"></iframe>${fl.map(f=>{const v=ed.v[f.k]??"";return `<label class="mu">${esc(f.l)}</label>`+(f.t=="a"?`<textarea style="font-family:inherit;font-size:15px" data-k="${f.k}" oninput="edV(this)">${esc(v||f.d)}</textarea>`:f.t=="c"?`<input type="color" data-k="${f.k}" value="${/^#[0-9a-f]{6}$/i.test(v||f.d)?v||f.d:"#000000"}" oninput="edV(this)">`:f.t=="i"?`<label class="mu" style="display:block"><input type="checkbox" id="rm_${f.k}"> ลบพื้นหลังรูป (ใช้กับรูปนิ่งเท่านั้น · ติ๊กก่อนเลือกรูป · เหมาะกับพื้นหลังสีเดียว) · รับรูป GIF/WebP ขยับ และวิดีโอสั้น (ไฟล์ไม่เกิน 3 MB)</label><input type="file" accept="image/*,video/*" data-k="${f.k}" onchange="edI(this)">`:`<input data-k="${f.k}" value="${esc(v||f.d)}" oninput="edV(this)">`)}).join("")}<button class="b f" ${s.editsLeft<=0?"disabled":""} onclick="saveEdit()">บันทึก (ใช้ 1 สิทธิ์)</button><button class="b s f" onclick="go('mine')">กลับ</button></div>`;
+return `<div class="c"><h3>${ed.adm?"ตั้งค่าเริ่มต้น":"ปรับแต่ง"}: ${esc(s.pname)}</h3><div class="mu">${ed.adm?"แก้ข้อความ/รูป/สี แบบเดียวกับที่ลูกค้าแก้ · สิ่งที่คุณตั้งตรงนี้จะเป็นค่าเริ่มต้นของสินค้านี้ ลูกค้าที่ซื้อจะเห็นแบบนี้ก่อน แล้วค่อยแก้ต่อได้":`สิทธิ์แก้ไขเหลือ <b>${s.editsLeft}</b> ครั้ง (กดบันทึก 1 ครั้ง = ใช้ 1 สิทธิ์) หมดแล้วต้องขอโค้ดใหม่`}</div><iframe class="pv" id="pv" sandbox="allow-scripts" srcdoc="${esc(build(s.tpl,fl,ed.v))}"></iframe>${fl.map(f=>{const v=ed.v[f.k]??"";return `<label class="mu">${esc(f.l)}</label>`+(f.t=="a"?`<textarea style="font-family:inherit;font-size:15px" data-k="${f.k}" oninput="edV(this)">${esc(v||f.d)}</textarea>`:f.t=="c"?`<input type="color" data-k="${f.k}" value="${/^#[0-9a-f]{6}$/i.test(v||f.d)?v||f.d:"#000000"}" oninput="edV(this)">`:f.t=="i"?`<label class="mu" style="display:block"><input type="checkbox" id="rm_${f.k}"> ลบพื้นหลังรูป (ใช้กับรูปนิ่งเท่านั้น · ติ๊กก่อนเลือกรูป · เหมาะกับพื้นหลังสีเดียว) · รับรูป GIF/WebP ขยับ และวิดีโอสั้น (ไฟล์ไม่เกิน 600 KB)</label><input type="file" accept="image/*,video/*" data-k="${f.k}" onchange="edI(this)">`:`<input data-k="${f.k}" value="${esc(v||f.d)}" oninput="edV(this)">`)}).join("")}${ed.adm?`<button class="b f" onclick="saveDefs()">บันทึกเป็นค่าเริ่มต้น</button><button class="b s f" onclick="admBack()">กลับ</button>`:`<button class="b f" ${s.editsLeft<=0?"disabled":""} onclick="saveEdit()">บันทึก (ใช้ 1 สิทธิ์)</button><button class="b s f" onclick="go('mine')">กลับ</button>`}</div>`;
 }
 const edPrev=()=>{const s=ed.s;$("#pv").srcdoc=build(s.tpl,fieldsOf(s.fields),ed.v)};
 const edV=el=>{ed.v[el.dataset.k]=el.value;edPrev()};
-const LIM=3*1024*1024;
-/* ไฟล์ใหญ่ → แบ่งเก็บเป็นหลายเอกสาร (เอกสารละไม่เกิน ~1 MB) ในคอลเลกชัน tpl_media */
-const CH=700000;
-const mSave=async(sid,k,data)=>{const base=sid+"_"+k+"_"+Date.now().toString(36),n=Math.ceil(data.length/CH);
-for(let i=0;i<n;i++)await dc("media",base+"_"+i).set({d:data.slice(i*CH,(i+1)*CH),at:Date.now()});
-return "@m:"+base+":"+n};
-const mLoad=async tk=>{const m=/^@m:(.+):(\d+)$/.exec(tk);if(!m)return tk;let o="";
-for(let i=0;i<+m[2];i++){const d=await dc("media",m[1]+"_"+i).get().catch(()=>({exists:false}));o+=d.exists?d.data().d:""}return o};
-const mDel=async tk=>{const m=/^@m:(.+):(\d+)$/.exec(tk||"");if(!m)return;for(let i=0;i<+m[2];i++)await dc("media",m[1]+"_"+i).delete().catch(()=>{})};
-const mResolve=async v=>{const o={};for(const k in (v||{}))o[k]=typeof v[k]=="string"&&v[k].startsWith("@m:")?await mLoad(v[k]):v[k];return o};
+const LIM=600*1024;
 const rdURL=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(Error("อ่านไฟล์ไม่ได้"));r.readAsDataURL(f)});
 const edI=async el=>{const f=el.files[0];if(!f)return;try{
 const vid=/^video\//.test(f.type),gif=f.type=="image/gif",wp=f.type=="image/webp"&&f.size<=LIM;
 if(vid||gif||wp){
-if(f.size>LIM){el.value="";return say("ไฟล์ใหญ่เกินไป ("+Math.round(f.size/1024)+" KB) ต้องไม่เกิน 3 MB ลดความยาว/ขนาดคลิป หรือใช้ช่องลิงก์แทน")}
+if(f.size>LIM){el.value="";return say("ไฟล์ใหญ่เกินไป ("+Math.round(f.size/1024)+" KB) ต้องไม่เกิน 600 KB ลดความยาว/ขนาดคลิป หรือใช้ช่องลิงก์แทน")}
 ed.v[el.dataset.k]=await rdURL(f)}
 else ed.v[el.dataset.k]=await pic(f,700,.72,$("#rm_"+el.dataset.k)?.checked?55:0);
 edPrev();
-if(Object.values(ed.v).reduce((a,x)=>a+(x||"").length,0)>9e6)say("รวมไฟล์ใหญ่เกิน ~6 MB ลองลดจำนวนไฟล์หรือใช้ช่องลิงก์แทน")
+if(JSON.stringify(ed.v).length>95e4)say("รวมไฟล์ใหญ่เกินกำหนดของฐานข้อมูล บันทึกไม่ได้ ลองลดจำนวนไฟล์หรือใช้ช่องลิงก์แทน")
 }catch(e){say(ERR(e))}};
 const saveEdit=()=>run(async()=>{
 const s=ed.s;
-if(Object.values(ed.v).reduce((a,x)=>a+(x||"").length,0)>9e6)return say("ไฟล์รวมใหญ่เกิน ~6 MB ลดจำนวน/ขนาดไฟล์ หรือใช้ช่องลิงก์แทน");
-const out={},old=[],isM=x=>typeof x=="string"&&x.startsWith("@m:");
-for(const k in ed.v){const v=ed.v[k],rw=ed.raw[k];
-if(typeof v=="string"&&v.length>3e4){
-if(isM(rw)&&v===ed.res[k])out[k]=rw;
-else{out[k]=await mSave(s.id,k,v);if(isM(rw))old.push(rw)}
-}else{out[k]=v;if(isM(rw))old.push(rw)}}
+if(JSON.stringify(ed.v).length>95e4)return say("ไฟล์รวมใหญ่เกินไป (เกิน 1 MB ของฐานข้อมูล) ลดจำนวน/ขนาดไฟล์ หรือใช้ช่องลิงก์แทน");
 await R.runTransaction(async t=>{
 const r=dc("sites",s.id),d=await t.get(r);
 if(!d.exists||d.data().owner!==me.u)throw Error("ไม่พบเว็บ");
 if(d.data().editsLeft<=0)throw Error("หมดสิทธิ์แก้ไขแล้ว");
-t.update(r,{vals:out,editsLeft:d.data().editsLeft-1,upd:Date.now()});
+t.update(r,{vals:ed.v,editsLeft:d.data().editsLeft-1,upd:Date.now()});
 });
-for(const o of old)await mDel(o);
 logEv("edit","แก้ไขเว็บ "+s.id);
 await load();ed=null;go("mine");say("บันทึกแล้ว เว็บอัปเดตทันที",1);
 });
@@ -364,7 +350,7 @@ await load();ed=null;go("mine");say("บันทึกแล้ว เว็บ
 const AT=[["prod","box","สินค้า"],["act","bell","กิจกรรมสด"],["cat","folder","หมวดหมู่"],["key","key","โค้ด"],["rt","gift","สิทธิ์ฟรี"],["ann","mega","ประกาศ"],["set","sliders","ตั้งค่าร้าน"],["ord","list","ประวัติ"],["site","globe","เว็บลูกค้า"]];
 function adminUI(){
 let h=`<nav>${AT.map(([k,i,l])=>`<button class="b sm ${at==k?"":"s"}" onclick="at='${k}';render()">${ic(i,15)}${l}</button>`).join("")}</nav>`;
-if(at=="prod")h+=`<button class="b f" style="margin:0 0 12px" onclick="prodForm('')">${ic("plus",16)}เพิ่มสไตล์เว็บ</button><div class="c">${prods.map(p=>`<div class="rw"><span><b style="font-weight:500">${esc(p.name)}</b> <span style="${p.pcol?`color:${esc(p.pcol)}`:""}">${p.price} บาท</span> ${p.cat?`<span class="chip">${esc(p.cat)}</span>`:""} ${p.hot?'<span class="chip" style="color:#e8590c;border-color:#e8590c">ยอดฮิต</span>':""} ${p.hide?'<span class="chip">ซ่อน</span>':""}${stk(p)}<div class="mu">แก้ได้ ${p.edits||3} ครั้ง${p.bd?" · ขอบ"+(p.bd=="rainbow"?"สีรุ้ง":"สี"):""}</div></span><span class="ac"><button class="b s sm" onclick="prodForm('${p.id}')">แก้ไข</button><button class="b s sm" onclick="togHide('${p.id}',${!p.hide})">${p.hide?"แสดง":"ซ่อน"}</button><button class="b d sm" onclick="delProd('${p.id}')">ลบ</button></span></div>`).join("")||'<span class="mu">ยังไม่มี</span>'}</div>`;
+if(at=="prod")h+=`<button class="b f" style="margin:0 0 12px" onclick="prodForm('')">${ic("plus",16)}เพิ่มสไตล์เว็บ</button><div class="c">${prods.map(p=>`<div class="rw"><span style="display:flex;gap:10px;align-items:center;min-width:0;flex:1;cursor:pointer" onclick="admDef('${p.id}')"><span style="width:44px;height:55px;flex:none;border-radius:8px;background:var(--bd) center/cover;background-image:url('${esc(p.img||"")}')"></span><span><b style="font-weight:500">${esc(p.name)}</b> <span style="${p.pcol?`color:${esc(p.pcol)}`:""}">${p.price} บาท</span> ${p.cat?`<span class="chip">${esc(p.cat)}</span>`:""} ${p.hot?'<span class="chip" style="color:#e8590c;border-color:#e8590c">ยอดฮิต</span>':""} ${p.hide?'<span class="chip">ซ่อน</span>':""}${stk(p)}<div class="mu">แก้ได้ ${p.edits||3} ครั้ง${p.bd?" · ขอบ"+(p.bd=="rainbow"?"สีรุ้ง":"สี"):""}</div></span></span><span class="ac"><button class="b sm" onclick="admDef('${p.id}')">ตั้งค่าเริ่มต้น</button><button class="b s sm" onclick="mediaUI('${p.id}')">รูป/วิดีโอ</button><button class="b s sm" onclick="prodForm('${p.id}')">แก้ไข</button><button class="b s sm" onclick="togHide('${p.id}',${!p.hide})">${p.hide?"แสดง":"ซ่อน"}</button><button class="b d sm" onclick="delProd('${p.id}')">ลบ</button></span></div>`).join("")||'<span class="mu">ยังไม่มี</span>'}</div>`;
 if(at=="act")h+=`<div class="c"><h3>กิจกรรมสด (อัปเดตเอง ไม่ต้องรีเฟรช)</h3><div class="mu">ใครสมัคร ใครกดดูอะไร ใครซื้อ ใครกด LINE จะเด้งแจ้งเตือนทันที</div>${evs.map(e=>`<div class="rw"><div><b style="font-weight:500">${esc(e.u)}</b> ${esc(e.txt)} <span class="chip">${(EV[e.t]||["","อื่นๆ"])[1]}</span><div class="mu">${fd(e.at)}</div></div></div>`).join("")||'<div class="mu" style="margin-top:8px">ยังไม่มีกิจกรรม</div>'}</div>`;
 if(at=="cat")h+=`<div class="c"><h3>หมวดหมู่สินค้า</h3><div class="mu">ยังไม่มีหมวดอัตโนมัติ เพิ่มเองได้ตามต้องการ · ถ้ามีหมวดอย่างน้อย 1 หมวด หน้าแรกจะแสดงปุ่มหมวดพร้อมปุ่ม "ทั้งหมด"</div><input id="cn" placeholder="ชื่อหมวดใหม่"><button class="b f" onclick="addCat()">เพิ่มหมวด</button></div>${cats().length?`<div class="c">${cats().map((c,i)=>`<div class="rw"><b style="font-weight:500">${esc(c)}</b><button class="b d sm" onclick="delCat(${i})">ลบ</button></div>`).join("")}</div>`:""}`;
 if(at=="key"){const U=keys.filter(k=>!k.used);h+=`<div class="c"><h3>สร้างโค้ด (ให้ลูกค้าที่ติดต่อทาง LINE)</h3><select id="kp"><option value="*">ใช้ได้ทุกสไตล์</option>${prods.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select><input id="kn" type="number" value="1" min="1" max="100" placeholder="จำนวนโค้ด"><button class="b f" onclick="genKeys()">สร้าง</button><div id="ko" class="msg" ${lastKeys?"":'style="display:none"'}>${esc(lastKeys)}</div></div><div class="c"><h3>โค้ดที่ยังไม่ใช้ (${U.length})</h3>${U.slice(0,100).map(k=>`<div class="rw"><b style="font-weight:500">${esc(k.id)}</b><span class="mu">${k.pid=="*"?"ทุกสไตล์":esc((prods.find(p=>p.id==k.pid)||{}).name||"")}</span></div>`).join("")||'<span class="mu">ไม่มี</span>'}</div>`}
@@ -379,6 +365,45 @@ if(at=="ord")h+=`<div class="c">${orders.slice(0,80).map(o=>`<div class="rw"><di
 if(at=="site")h+=`<div class="c">${sites.map(s=>`<div class="rw"><div style="min-width:0"><b style="font-weight:500">${esc(s.id)}</b> · ${esc(s.pname)}<div class="mu">เจ้าของ ${esc(s.owner)} · เหลือสิทธิ์แก้ ${s.editsLeft}</div></div><span class="ac"><a class="b s sm" target="_blank" href="${esc(siteLink(s.id))}">เปิด</a><button class="b s sm" onclick="addEdits('${s.id}')">+3 สิทธิ์แก้</button><button class="b d sm" onclick="delSite('${s.id}')">ลบ</button></span></div>`).join("")||'<span class="mu">ยังไม่มี</span>'}</div>`;
 return h;
 }
+/* ===== แอดมินตั้งค่าเริ่มต้นของสินค้า ===== */
+const admDef=id=>{const p=prods.find(x=>x.id==id);if(!p)return;if(!(p.fields||"").trim()||!(p.tpl||"").trim())return say("สินค้านี้ยังไม่มีโค้ด/ฟิลด์ ให้กดแก้ไขแล้วใส่ก่อน");ed={adm:id,s:{pname:p.name,tpl:p.tpl,fields:p.fields,editsLeft:999},v:{...(p.defs||{})}};tab="edit";render();scrollTo(0,0)};
+const admBack=()=>{ed=null;tab="admin";render();scrollTo(0,0)};
+const saveDefs=()=>run(async()=>{const p=prods.find(x=>x.id==ed.adm),v=ed.v;
+if(JSON.stringify(v).length+(p.tpl||"").length+(p.img||"").length+(p.fields||"").length>95e4)return say("ไฟล์รวมใหญ่เกินกำหนดของฐานข้อมูล ลดขนาดรูป/คลิป หรือใช้ช่องลิงก์แทน");
+await dc("products",ed.adm).update({defs:v});await load();ed=null;tab="admin";render();scrollTo(0,0);say("บันทึกค่าเริ่มต้นแล้ว ลูกค้าจะเห็นตามนี้",1)});
+/* ===== รูป/วิดีโอของสินค้า (แอดมิน) ===== */
+let MS=[];
+const gm=async pid=>(await col("media").where("pid","==",pid).get()).docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>a.at-b.at);
+const shrink=(src,max,q)=>new Promise(ok=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext("2d").drawImage(i,0,0,c.width,c.height);ok(c.toDataURL(/^data:image\/png/.test(src)?"image/png":"image/jpeg",q))};i.onerror=()=>ok(src);i.src=src});
+const ytId=u=>(String(u).match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/)||[])[1];
+const mediaUI=id=>run(async()=>{
+const p=prods.find(x=>x.id==id);if(!p)return;
+let ms=await gm(id);
+if(p.img&&!ms.some(m=>m.id==p.cover)){const r=await col("media").add({pid:id,type:"img",src:p.img,at:Math.min(p.at||Date.now(),Date.now())-1});await dc("products",id).update({cover:r.id});p.cover=r.id;ms.unshift({id:r.id,pid:id,type:"img",src:p.img,at:0})}
+MS=ms;
+const L=[...ms.filter(m=>m.id==p.cover),...ms.filter(m=>m.id!=p.cover)];
+const tile=m=>{const c=m.id==p.cover,y=m.type=="vid"?ytId(m.src):"",th=m.type=="img"?m.src:(y?"https://img.youtube.com/vi/"+y+"/hqdefault.jpg":"");
+return `<div style="border:${c?"2px solid var(--ok)":"1px solid var(--bd)"};border-radius:10px;overflow:hidden"><div style="aspect-ratio:4/5;background:${th?"var(--bd) center/cover":"#000"};${th?`background-image:url('${esc(th)}');`:""}position:relative">${c?'<span class="chip ok" style="position:absolute;top:6px;left:6px;background:var(--bg)">รูปเริ่มต้น</span>':""}${m.type=="vid"?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.3)">${ic("play",34)}</div>`:""}</div><div style="padding:6px;display:flex;flex-direction:column;gap:6px">${m.type=="img"&&!c?`<button class="b sm" onclick="setCover('${id}','${m.id}')">ตั้งเป็นรูปเริ่มต้น</button>`:""}<button class="b d sm" onclick="delMedia('${id}','${m.id}')">ลบ</button></div></div>`};
+modal(`<h3 style="margin:0 0 4px;font-weight:500">${esc(p.name)}</h3><div class="mu" style="margin-bottom:10px">รูปที่มีป้าย "รูปเริ่มต้น" คือรูปที่โชว์หน้าแรกและเป็นรูปแรกในหน้าสินค้า</div>${L.length?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${L.map(tile).join("")}</div>`:'<div class="mu">ยังไม่มีรูป/วิดีโอ</div>'}
+<div class="c" style="margin-top:14px"><h3>เพิ่มรูป</h3><input id="mf" type="file" accept="image/*" multiple><label class="mu" style="display:block"><input type="checkbox" id="mr"> ลบพื้นหลังรูป</label><button class="b f" onclick="addImgs('${id}')">${ic("plus",16)}อัปโหลดรูป</button><div class="mu">เลือกได้หลายรูปพร้อมกัน · ถ้ายังไม่มีรูปเริ่มต้น รูปแรกจะถูกตั้งให้อัตโนมัติ</div></div>
+<div class="c"><h3>เพิ่มวิดีโอ</h3><input id="mv" placeholder="ลิงก์ YouTube หรือลิงก์ไฟล์ .mp4"><button class="b f" onclick="addVid('${id}')">${ic("plus",16)}เพิ่มวิดีโอ</button><div class="mu">(ไฟล์วิดีโอเก็บในฐานข้อมูลไม่ได้ ต้องใช้ลิงก์)</div></div>
+<button class="b s f" onclick="closeM();prodForm('${id}')">แก้ไขข้อมูลสินค้า (ชื่อ/ราคา/สต๊อก/โค้ด)</button><button class="b s f" onclick="closeM()">ปิด</button>`);
+});
+const setCover=(pid,mid)=>run(async()=>{const m=MS.find(x=>x.id==mid);if(!m)return;await dc("products",pid).update({img:await shrink(m.src,600,.72),cover:mid});await load();render();say("ตั้งรูปเริ่มต้นแล้ว",1)}).then(()=>mediaUI(pid));
+const delMedia=(pid,mid)=>{if(!confirm("ลบรายการนี้?"))return;run(async()=>{const p=prods.find(x=>x.id==pid);await dc("media",mid).delete();if(p&&p.cover==mid){const n=MS.find(x=>x.id!=mid&&x.type=="img");await dc("products",pid).update(n?{img:await shrink(n.src,600,.72),cover:n.id}:{img:"",cover:""})}await load();render()}).then(()=>mediaUI(pid))};
+const addImgs=pid=>run(async()=>{const fs=[...$("#mf").files];if(!fs.length)return say("เลือกรูปก่อน");
+const rm=$("#mr").checked,p=prods.find(x=>x.id==pid);let n=0,has=!!p.cover&&MS.some(m=>m.id==p.cover);
+for(const f of fs){const s=await pic(f,rm?600:800,.72,rm?55:0);if(s.length>900000){say("รูป "+f.name+" ใหญ่เกินไป");continue}
+const r=await col("media").add({pid,type:"img",src:s,at:Date.now()+n});n++;
+if(!has){await dc("products",pid).update({img:await shrink(s,600,.72),cover:r.id});has=true}}
+await load();render();if(n)say("เพิ่ม "+n+" รูปแล้ว",1)}).then(()=>mediaUI(pid));
+const addVid=pid=>run(async()=>{const u=$("#mv").value.trim();if(!/^https?:\/\//i.test(u))return say("ใส่ลิงก์ที่ขึ้นต้นด้วย http");
+await col("media").add({pid,type:"vid",src:u,at:Date.now()});say("เพิ่มวิดีโอแล้ว",1)}).then(()=>mediaUI(pid));
+/* แกลเลอรีในหน้าสินค้า (ลูกค้า) */
+const loadGal=async id=>{try{const p=prods.find(x=>x.id==id),ms=await gm(id);if(!ms.length||!$("#pg"))return;
+ms.sort((a,b)=>(b.id==p.cover)-(a.id==p.cover)||a.at-b.at);
+$("#pg").innerHTML=`<div style="display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;margin:10px 0 6px">${ms.map(m=>`<div style="flex:none;width:100%;scroll-snap-align:start;aspect-ratio:4/3;display:flex;align-items:center;background:var(--bd);border-radius:10px;overflow:hidden">${m.type=="vid"?vidHtml(m.src).replace('class="vid"','class="vid" style="margin:0;border-radius:0"'):`<img src="${esc(m.src)}" style="width:100%;height:100%;object-fit:contain;display:block">`}</div>`).join("")}</div>${ms.length>1?`<div class="mu" style="text-align:center;margin-bottom:6px">เลื่อนดูรูป/วิดีโอ (${ms.length})</div>`:""}`}catch(e){}};
+
 function prodForm(id){
 const p=prods.find(x=>x.id==id)||{fields:SAMPLE_F,tpl:SAMPLE_T,edits:3},L=[...cats()];if(p.cat&&!L.includes(p.cat))L.push(p.cat);
 const rb=p.bd=="rainbow",hx=/^#[0-9a-f]{6}$/i;
@@ -394,11 +419,12 @@ if(!name||!(price>=0))return say("กรอกชื่อและราคา"
 const d={name,cat:$("#pc").value,price,stock:sv===""?null:Math.max(0,Math.floor(+sv)||0),edits:+$("#pe").value||3,hot:$("#ph").checked,pcol:$("#pco").checked?$("#pcv").value:"",bd:$("#pbo").checked?($("#pbt").value=="rb"?"rainbow":$("#pbc").value):"",desc:$("#pd").value.trim(),fields:$("#pf").value,tpl:$("#pt").value};
 if(d.tpl.length>700000)return say("โค้ดใหญ่เกินไป");
 const f=$("#pm").files[0];if(f)d.img=await pic(f,600,.72,$("#pr").checked?55:0);
-if(id)await dc("products",id).update(d);else await col("products").add({img:"",hide:false,...d,at:Date.now()});
+if(id)await dc("products",id).update(d);else{const r=await col("products").add({img:"",hide:false,...d,at:Date.now()});id=r.id}
+if(f&&d.img){const m=await col("media").add({pid:id,type:"img",src:d.img,at:Date.now()});await dc("products",id).update({cover:m.id})}
 closeM();await load();render();say("บันทึกแล้ว",1);
 });
 const togHide=(id,v)=>run(async()=>{await dc("products",id).update({hide:v});await load();render()});
-const delProd=id=>{if(confirm("ลบสไตล์นี้? (เว็บที่ลูกค้าเปิดแล้วไม่หาย)"))run(async()=>{await dc("products",id).delete();await load();render()})};
+const delProd=id=>{if(confirm("ลบสไตล์นี้? (เว็บที่ลูกค้าเปิดแล้วไม่หาย)"))run(async()=>{const q=await col("media").where("pid","==",id).get();await Promise.all(q.docs.map(x=>x.ref.delete()));await dc("products",id).delete();await load();render()})};
 const addCat=()=>run(async()=>{const n=$("#cn").value.trim();if(!n)return say("กรอกชื่อหมวด");if(cats().includes(n))return say("มีหมวดนี้แล้ว");
 await dc("settings","shop").set({cats:[...cats(),n]},{merge:true});await load();render();say("เพิ่มหมวดแล้ว",1)});
 const delCat=i=>{const c=cats()[i];if(confirm('ลบหมวด "'+c+'"? (สินค้าในหมวดนี้ยังอยู่ แต่จะโผล่เฉพาะแท็บทั้งหมด)'))run(async()=>{const a=[...cats()];a.splice(i,1);if(cf==c)cf="";await dc("settings","shop").set({cats:a},{merge:true});await load();render()})};
@@ -502,7 +528,7 @@ if(SITE){
 $("#app").className="";
 const s=await dc("sites",SITE).get();
 if(!s.exists){$("#app").innerHTML='<div class="c">ไม่พบเว็บนี้</div>';return}
-const d=s.data(),html=build(d.tpl,fieldsOf(d.fields),await mResolve(d.vals));
+const d=s.data(),html=build(d.tpl,fieldsOf(d.fields),d.vals);
 document.open();document.write(html);document.close();return;
 }
 if(me){
