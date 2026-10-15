@@ -149,7 +149,7 @@ const cats=()=>shop.cats||[];
 let me=null,prods=[],orders=[],sites=[],keys=[],accts=[],evs=[],shop={},myR=0,tab="shop",at="prod",ed=null,lastKeys="",unE=null,unA=null;
 try{me=JSON.parse(localStorage.getItem("tpl_sess")||"null")}catch(e){}
 const isAdm=()=>me&&me.role=="admin";
-const SITE=new URLSearchParams(location.search).get("site");
+const SITE=new URLSearchParams(location.search).get("site")||(/^\?[a-z0-9]{5}$/.test(location.search)?location.search.slice(1):null);
 const RV=()=>+shop.rv||0;
 const soldOut=p=>p.stock!=null&&p.stock<=0;
 const canRight=p=>myR>0&&!soldOut(p)&&(RV()<=0||p.price<=RV());
@@ -291,23 +291,25 @@ await load();render();setupUI2(oref.id);
 /* ===== เว็บของฉัน ===== */
 const SN={paid:["รับแล้ว รอตั้งชื่อลิงก์","ok"],done:["เปิดเว็บแล้ว","ok"]};
 const chip=s=>`<span class="chip ${(SN[s]||["",""])[1]}">${(SN[s]||[s])[0]}</span>`;
-const siteLink=s=>location.origin+location.pathname+"?site="+s;
-const mineSec=()=>!me?`<div class="c"><div class="mu">เข้าสู่ระบบเพื่อดูเว็บและรายการของคุณ</div><button class="b f" onclick="authUI(0)">เข้าสู่ระบบ</button></div>`:`${sites.map(s=>`<div class="c"><b style="font-weight:500">${esc(s.pname)}</b> <span class="chip ok">แก้ได้อีก ${s.editsLeft} ครั้ง</span><div class="msg">${esc(siteLink(s.id))}</div><div class="ac"><a class="b s sm" target="_blank" href="${esc(siteLink(s.id))}">เปิดเว็บ</a><button class="b sm" onclick="editOpen('${s.id}')">ปรับแต่ง</button></div></div>`).join("")||'<div class="c mu">ยังไม่มีเว็บ เลือกสไตล์จากหน้าแรกได้เลย</div>'}${orders.some(o=>o.status=="paid")?`<div class="c"><h3>รอตั้งชื่อลิงก์</h3>${orders.filter(o=>o.status=="paid").map(o=>`<div class="rw"><div><b style="font-weight:500">${esc(o.pname)}</b> ${chip(o.status)}<div class="mu">${fd(o.at)} · ${o.method=="right"?"ใช้สิทธิ์ฟรี":o.price+" บาท"}</div></div><button class="b sm" onclick="setupUI2('${o.id}')">ตั้งชื่อลิงก์</button></div>`).join("")}</div>`:""}`;
-const setupUI2=oid=>modal(`<h3 style="margin:0 0 6px;font-weight:500">ตั้งชื่อลิงก์เว็บของคุณ</h3><div class="mu">a-z 0-9 - (3-30 ตัว) ตั้งแล้วเปลี่ยนไม่ได้</div><input id="sg" placeholder="เช่น myshop" autocapitalize="none"><button class="b f" onclick="makeSite('${oid}')">เปิดเว็บ</button>`);
+const siteLink=s=>location.origin+location.pathname+"?"+s;
+const mineSec=()=>!me?`<div class="c"><div class="mu">เข้าสู่ระบบเพื่อดูเว็บและรายการของคุณ</div><button class="b f" onclick="authUI(0)">เข้าสู่ระบบ</button></div>`:`${sites.map(s=>`<div class="c"><b style="font-weight:500">${esc(s.slug||s.pname)}</b> <span class="chip ok">แก้ได้อีก ${s.editsLeft} ครั้ง</span><div class="msg">${esc(siteLink(s.id))}</div><div class="ac"><a class="b s sm" target="_blank" href="${esc(siteLink(s.id))}">เปิดเว็บ</a><button class="b sm" onclick="editOpen('${s.id}')">ปรับแต่ง</button></div></div>`).join("")||'<div class="c mu">ยังไม่มีเว็บ เลือกสไตล์จากหน้าแรกได้เลย</div>'}${orders.some(o=>o.status=="paid")?`<div class="c"><h3>รอตั้งชื่อลิงก์</h3>${orders.filter(o=>o.status=="paid").map(o=>`<div class="rw"><div><b style="font-weight:500">${esc(o.pname)}</b> ${chip(o.status)}<div class="mu">${fd(o.at)} · ${o.method=="right"?"ใช้สิทธิ์ฟรี":o.price+" บาท"}</div></div><button class="b sm" onclick="setupUI2('${o.id}')">ตั้งชื่อลิงก์</button></div>`).join("")}</div>`:""}`;
+const setupUI2=oid=>modal(`<h3 style="margin:0 0 6px;font-weight:500">ตั้งชื่อเว็บของคุณ</h3><div class="mu">ตั้งชื่อซ้ำกับคนอื่นได้ ลิงก์จะสั้นและสุ่มให้อัตโนมัติ</div><input id="sg" placeholder="เช่น เว็บขอแฟน" autocapitalize="none"><button class="b f" onclick="makeSite('${oid}')">เปิดเว็บ</button>`);
 const makeSite=oid=>run(async()=>{
-const slug=$("#sg").value.trim().toLowerCase();
-if(!/^[a-z0-9-]{3,30}$/.test(slug))return say("ชื่อลิงก์ไม่ถูกต้อง");
+const nm=$("#sg").value.trim().slice(0,30);
+if(!nm)return say("ตั้งชื่อเว็บก่อน");
 const o=await dc("orders",oid).get(),p=prods.find(x=>x.id==o.data().pid);
 if(!p)throw Error("ไม่พบสินค้า");
+let id="";
 await R.runTransaction(async t=>{
-const sr=dc("sites",slug),or=dc("orders",oid),[s,od]=await Promise.all([t.get(sr),t.get(or)]);
-if(s.exists)throw Error("ชื่อลิงก์นี้ถูกใช้แล้ว");
+const or=dc("orders",oid),od=await t.get(or);
 if(!od.exists||od.data().u!==me.u||od.data().status!=="paid")throw Error("รายการนี้ใช้ไม่ได้");
-t.set(sr,{owner:me.u,pid:p.id,pname:p.name,tpl:p.tpl,fields:p.fields,vals:{},editsLeft:+p.edits||3,at:Date.now()});
-t.update(or,{status:"done",site:slug});
+for(let i=0;i<6&&!id;i++){const c=rs().substring(0,5);if(!(await t.get(dc("sites",c))).exists)id=c}
+if(!id)throw Error("ลองใหม่อีกครั้ง");
+t.set(dc("sites",id),{owner:me.u,slug:nm,pid:p.id,pname:p.name,tpl:p.tpl,fields:p.fields,vals:{},editsLeft:+p.edits||3,at:Date.now()});
+t.update(or,{status:"done",site:id});
 });
-logEv("site","เปิดเว็บ "+slug+" ("+p.name+")");
-closeM();await load();go("mine");say("เปิดเว็บแล้ว ปรับแต่งได้เลย",1);
+logEv("site","เปิดเว็บ "+nm+" ("+id+")");
+closeM();await load();go("mine");say("เปิดเว็บแล้ว ลิงก์: ?"+id,1);
 });
 
 /* ===== ปรับแต่งเว็บ ===== */
