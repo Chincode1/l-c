@@ -153,6 +153,7 @@ const isAdm=()=>me&&me.role=="admin";
 const SITE=(()=>{const q=new URLSearchParams(location.search),h=location.hash.replace(/^#\/?/,"").replace(/^site=/,"");
 const f=q.get("site")||(location.search.match(/^\?([a-z0-9]{5})(?:&|#|$)/)||[])[1]||(/^[a-z0-9]{5}$/.test(h)?h:null);
 if(f)return f;
+const ps=location.pathname.split("/").filter(Boolean).pop();if(ps&&/^[a-z0-9]{5}$/.test(ps)&&ps!=="index")return ps;
 try{const r=new URL(document.referrer);const m=(r.search.match(/^\?([a-z0-9]{5})(?:&|$)/)||[])[1]||(r.hash.replace(/^#\/?/,"").match(/^[a-z0-9]{5}$/)||[])[0];if(m&&r.origin===location.origin)return m}catch(e){}
 return null})();
 const RV=()=>+shop.rv||0;
@@ -297,7 +298,7 @@ await load();render();setupUI2(oref.id);
 /* ===== เว็บของฉัน ===== */
 const SN={paid:["รับแล้ว รอตั้งชื่อลิงก์","ok"],done:["เปิดเว็บแล้ว","ok"]};
 const chip=s=>`<span class="chip ${(SN[s]||["",""])[1]}">${(SN[s]||[s])[0]}</span>`;
-const siteLink=s=>location.origin+location.pathname+"?site="+s+"#"+s;
+const siteLink=s=>location.origin+location.pathname+"?site="+s;
 const mineSec=()=>!me?`<div class="c"><div class="mu">เข้าสู่ระบบเพื่อดูเว็บและรายการของคุณ</div><button class="b f" onclick="authUI(0)">เข้าสู่ระบบ</button></div>`:`${sites.map(s=>`<div class="c"><b style="font-weight:500">${esc(s.slug||s.pname)}</b> <span class="chip ok">แก้ได้อีก ${s.editsLeft} ครั้ง</span><div class="msg">${esc(siteLink(s.id))}</div><div class="ac"><a class="b s sm" target="_blank" href="${esc(siteLink(s.id))}">เปิดเว็บ</a><button class="b sm" onclick="editOpen('${s.id}')">ปรับแต่ง</button></div></div>`).join("")||'<div class="c mu">ยังไม่มีเว็บ เลือกสไตล์จากหน้าแรกได้เลย</div>'}${orders.some(o=>o.status=="paid")?`<div class="c"><h3>รอตั้งชื่อลิงก์</h3>${orders.filter(o=>o.status=="paid").map(o=>`<div class="rw"><div><b style="font-weight:500">${esc(o.pname)}</b> ${chip(o.status)}<div class="mu">${fd(o.at)} · ${o.method=="right"?"ใช้สิทธิ์ฟรี":o.price+" บาท"}</div></div><button class="b sm" onclick="setupUI2('${o.id}')">ตั้งชื่อลิงก์</button></div>`).join("")}</div>`:""}`;
 const setupUI2=oid=>modal(`<h3 style="margin:0 0 6px;font-weight:500">ตั้งชื่อเว็บของคุณ</h3><div class="mu">ตั้งชื่อซ้ำกับคนอื่นได้ ลิงก์จะสั้นและสุ่มให้อัตโนมัติ</div><input id="sg" placeholder="เช่น เว็บขอแฟน" autocapitalize="none"><button class="b f" onclick="makeSite('${oid}')">เปิดเว็บ</button>`);
 const makeSite=oid=>run(async()=>{
